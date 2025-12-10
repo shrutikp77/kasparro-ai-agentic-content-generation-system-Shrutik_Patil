@@ -2,35 +2,57 @@
 Base Agent Module
 
 Abstract base class for all agents in the content generation system.
+Enables autonomous agent execution with dependency tracking.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any, Dict, List
 
 
 class BaseAgent(ABC):
     """
     Abstract base class for all agents.
+    Provides dependency tracking and status management for autonomous execution.
     """
     
-    def __init__(self, name: str):
+    def __init__(self, agent_id: str):
         """
         Initialize the base agent.
         
         Args:
-            name: The agent's identifier
+            agent_id: The agent's unique identifier
         """
-        self.name = name
+        self.agent_id = agent_id
+        self.dependencies: List[str] = []
+        self.status: str = "pending"  # pending, running, completed
+        self.output: Any = None
     
     @abstractmethod
-    def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    def can_execute(self, completed_agents: List[str]) -> bool:
         """
-        Process input data and return output.
+        Check if this agent's dependencies are satisfied.
         
         Args:
-            input_data: Input data to process
+            completed_agents: List of agent IDs that have completed execution
             
         Returns:
-            Processed output data
+            True if all dependencies are satisfied, False otherwise
         """
         pass
+    
+    @abstractmethod
+    def execute(self, shared_data: Dict[str, Any]) -> Any:
+        """
+        Execute agent logic autonomously.
+        
+        Args:
+            shared_data: Shared data dictionary accessible by all agents
+            
+        Returns:
+            Agent execution output
+        """
+        pass
+    
+    def mark_complete(self):
+        """Mark the agent as completed."""
+        self.status = "completed"
