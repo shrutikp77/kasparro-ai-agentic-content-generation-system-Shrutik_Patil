@@ -145,5 +145,3 @@ Curious about the architecture? Check out the full documentation:
 3. **Building on this?** The modular design makes it easy to add new agents!
 
 ---
-
-Made with ☕ and curiosity.
