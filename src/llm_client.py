@@ -45,8 +45,8 @@ class LLMClient:
         
         raise Exception("Max retries exceeded for rate limiting")
     
-    def generate_json(self, system_prompt: str, user_prompt: str, max_tokens: int = 2000) -> dict:
-        """Generate JSON output using Groq"""
+    def generate_json(self, system_prompt: str, user_prompt: str, max_tokens: int = 2000, max_retries: int = 3) -> dict:
+        """Generate JSON output using Groq with retry logic for JSON parsing"""
         import re
         
         # Add stronger JSON instruction to system prompt
@@ -56,24 +56,44 @@ CRITICAL INSTRUCTIONS:
 1. Respond with ONLY valid JSON
 2. Do NOT include any text before or after the JSON
 3. Do NOT use markdown code blocks
-4. Start your response with [ or {{ and end with ] or }}"""
+4. Start your response with [ or {{ and end with ] or }}
+5. Use double quotes for all strings
+6. Do NOT include newlines within string values"""
         
-        response = self.generate(json_system_prompt, user_prompt, max_tokens)
-        
-        # Clean up markdown code blocks if present
-        response = response.replace("```json", "").replace("```", "").strip()
-        
-        # Try to extract JSON from response using regex
-        # Look for array [...] or object {...}
-        json_match = re.search(r'(\[[\s\S]*\]|\{[\s\S]*\})', response)
-        if json_match:
-            response = json_match.group(1)
-        
-        try:
-            return json.loads(response)
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse JSON response: {response[:500]}...")
-            raise ValueError(f"Invalid JSON from LLM: {e}")
+        for attempt in range(max_retries):
+            response = self.generate(json_system_prompt, user_prompt, max_tokens)
+            
+            # Clean up markdown code blocks if present
+            response = response.replace("```json", "").replace("```", "").strip()
+            
+            # Try to extract JSON from response using regex
+            # Look for array [...] or object {...}
+            json_match = re.search(r'(\[[\s\S]*\]|\{[\s\S]*\})', response)
+            if json_match:
+                response = json_match.group(1)
+            
+            # Clean up common JSON issues
+            # Remove control characters except newlines and tabs
+            response = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', response)
+            
+            # Fix unescaped newlines within strings (common LLM issue)
+            # This replaces actual newlines between quotes with escaped \n
+            def fix_string_newlines(match):
+                return match.group(0).replace('\n', '\\n').replace('\r', '\\r')
+            
+            # Match strings and fix internal newlines
+            response = re.sub(r'"[^"]*"', fix_string_newlines, response)
+            
+            try:
+                return json.loads(response)
+            except json.JSONDecodeError as e:
+                if attempt < max_retries - 1:
+                    print(f"JSON parse error (attempt {attempt + 1}/{max_retries}): {e}")
+                    print(f"Retrying with fresh LLM call...")
+                    time.sleep(2)  # Brief delay before retry
+                else:
+                    print(f"Failed to parse JSON response after {max_retries} attempts: {response[:500]}...")
+                    raise ValueError(f"Invalid JSON from LLM: {e}")
 
 
 # Singleton instance
