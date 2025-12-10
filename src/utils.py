@@ -6,8 +6,53 @@ This module contains helper functions and utilities used across the content gene
 
 import json
 import os
+from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
+
+
+def write_json_output(data: Dict, filename: str, output_dir: str = "output/") -> None:
+    """
+    Write data to a JSON file with proper formatting.
+    
+    Args:
+        data: Dictionary data to write (must be JSON-serializable)
+        filename: Name of the output file
+        output_dir: Directory for output files (default: "output/")
+        
+    Raises:
+        ValueError: If data is not JSON-serializable
+        IOError: If file cannot be written
+    """
+    try:
+        # Validate data is JSON-serializable
+        json.dumps(data)
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"Data is not JSON-serializable: {e}")
+    
+    try:
+        # Create output_dir if it doesn't exist
+        ensure_directory(output_dir)
+        
+        # Build full file path
+        filepath = os.path.join(output_dir, filename)
+        
+        # Write data to JSON file with proper formatting
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            
+    except IOError as e:
+        raise IOError(f"Failed to write file {filename}: {e}")
+
+
+def ensure_directory(directory: str) -> None:
+    """
+    Create directory if it doesn't exist.
+    
+    Args:
+        directory: Directory path to create
+    """
+    Path(directory).mkdir(parents=True, exist_ok=True)
 
 
 def load_json(filepath: str) -> Dict[str, Any]:
@@ -46,16 +91,6 @@ def generate_timestamp() -> str:
         Formatted timestamp string
     """
     return datetime.now().strftime("%Y%m%d_%H%M%S")
-
-
-def ensure_directory(path: str) -> None:
-    """
-    Ensure a directory exists, creating it if necessary.
-    
-    Args:
-        path: Directory path to ensure exists
-    """
-    os.makedirs(path, exist_ok=True)
 
 
 def validate_config(config: Dict[str, Any], required_keys: list) -> bool:

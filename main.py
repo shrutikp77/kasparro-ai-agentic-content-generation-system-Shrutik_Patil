@@ -4,16 +4,11 @@ Main Entry Point
 Kasparro AI - Agentic Content Generation System
 
 This is the main entry point for the content generation application.
+Executes the multi-agent DAG pipeline for content generation.
 """
 
-import sys
-import os
-
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
-from src.orchestrator import Orchestrator
-from src.utils import ensure_directory, generate_timestamp, save_json
+from src.orchestrator import AgentOrchestrator
+from src.utils import write_json_output
 
 
 def main():
@@ -24,25 +19,64 @@ def main():
     print("Kasparro AI - Agentic Content Generation System")
     print("=" * 60)
     
-    # Ensure output directory exists
-    ensure_directory("output")
+    print("\nStarting multi-agent content generation pipeline...")
     
-    # Initialize orchestrator
-    orchestrator = Orchestrator()
+    # Define the hardcoded product data
+    product_data = {
+        "name": "GlowBoost Vitamin C Serum",
+        "concentration": "10% Vitamin C",
+        "skin_type": ["Oily", "Combination"],
+        "key_ingredients": ["Vitamin C", "Hyaluronic Acid"],
+        "benefits": ["Brightening", "Fades dark spots"],
+        "how_to_use": "Apply 2-3 drops in the morning before sunscreen",
+        "side_effects": "Mild tingling for sensitive skin",
+        "price": "₹699"
+    }
     
-    # TODO: Register agents
-    # orchestrator.register_agent("agent_name", agent_instance)
+    print(f"\nProduct: {product_data['name']}")
+    print(f"Price: {product_data['price']}")
     
-    # TODO: Set up pipeline
-    # orchestrator.set_pipeline(["agent1", "agent2", "agent3"])
+    # Initialize AgentOrchestrator
+    orchestrator = AgentOrchestrator()
     
-    # TODO: Run the content generation pipeline
-    # result = orchestrator.run(input_data)
+    print("\nAgent execution order based on DAG dependencies...")
+    print("  parser (no deps) → runs first")
+    print("  questions, product, comparison (dep: parser) → run after parser")
+    print("  faq (deps: parser, questions) → runs after questions")
     
-    print("\nSystem initialized successfully!")
-    print(f"Timestamp: {generate_timestamp()}")
-    print("\nReady to generate content.")
+    # Run the DAG execution
+    print("\n" + "-" * 40)
+    print("Executing agents...")
+    print("-" * 40)
     
+    results = orchestrator.execute_dag(product_data)
+    
+    # Print status of each agent
+    agent_statuses = orchestrator.get_agent_status()
+    for agent_id, status in agent_statuses.items():
+        print(f"  [{agent_id}] {status}")
+    
+    # Write outputs to JSON files
+    print("\n" + "-" * 40)
+    print("Saving outputs to JSON files...")
+    print("-" * 40)
+    
+    write_json_output(results["faq"], "faq.json")
+    print("  ✓ faq.json")
+    
+    write_json_output(results["product"], "product_page.json")
+    print("  ✓ product_page.json")
+    
+    write_json_output(results["comparison"], "comparison_page.json")
+    print("  ✓ comparison_page.json")
+    
+    print("\n" + "=" * 60)
+    print("All pages generated successfully!")
+    print("Outputs saved to: output/")
+    print("=" * 60)
+    
+    return results
+
 
 if __name__ == "__main__":
     main()
