@@ -71,7 +71,8 @@ class ProductTemplate:
             "page_type": "product",
             "sections": {
                 "name": str(product_data.get("name", "")),
-                "description": str(product_data.get("concentration", "")),
+                "description": str(product_data.get("description", "")),  # LLM-generated description
+                "concentration": str(product_data.get("concentration", "")),  # Product concentration
                 "benefits": list(product_data.get("benefits", [])),
                 "usage": str(product_data.get("how_to_use", "")),
                 "ingredients": list(product_data.get("key_ingredients", [])),

@@ -88,6 +88,7 @@ Write naturally, professionally. Base everything on the data provided. Return ON
         # Structure using template - use field names expected by ProductTemplate
         product_data = {
             "name": product.name,
+            "description": content["description"],  # LLM-generated description
             "concentration": product.concentration,
             "benefits": content["benefits_section"] if isinstance(content["benefits_section"], list) else product.benefits,
             "how_to_use": content["usage_section"],
