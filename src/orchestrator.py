@@ -1,122 +1,86 @@
 """
 Orchestrator Module
 
-This module coordinates the execution of multiple agents in the content generation pipeline.
-It manages the workflow using DAG-based orchestration for autonomous agent execution.
+Coordinates the execution of multiple agents using LangGraph workflow.
+This module provides a high-level interface for the content generation pipeline.
 """
 
-import time
-from typing import Dict, List, Any
-from src.agents.parser_agent import DataParserAgent
-from src.agents.question_agent import QuestionGenerationAgent
-from src.agents.faq_agent import FAQGenerationAgent
-from src.agents.product_agent import ProductPageAgent
-from src.agents.comparison_agent import ComparisonAgent
+import os
+from typing import Dict, Any
+
+from src.graph.workflow import content_workflow
+from src.graph.state import ContentGenerationState
 
 
 class AgentOrchestrator:
     """
-    Orchestrator class that coordinates agent execution using DAG-based dependencies.
+    Orchestrator class that coordinates agent execution using LangGraph.
     
-    DAG Structure:
-    - parser (no deps) → runs first
-    - questions, product, comparison (dep: parser) → run after parser
-    - faq (deps: parser, questions) → runs after questions completes
+    This class wraps the LangGraph workflow and provides a simple interface
+    for executing the content generation pipeline.
+    
+    DAG Structure (managed by LangGraph):
+    - parse_product (no deps) → runs first
+    - generate_questions, generate_product_page, generate_comparison_page (dep: parse_product)
+    - generate_faq_page (deps: parse_product, generate_questions) → runs after questions
     """
     
     def __init__(self):
-        """Initialize the orchestrator with all agents and shared data."""
-        # Initialize all 5 agents
-        self.parser_agent = DataParserAgent()
-        self.question_agent = QuestionGenerationAgent()
-        self.faq_agent = FAQGenerationAgent()
-        self.product_agent = ProductPageAgent()
-        self.comparison_agent = ComparisonAgent()
-        
-        # Create agents dict: {agent_id: agent_instance}
-        self.agents: Dict[str, Any] = {
-            "parser": self.parser_agent,
-            "questions": self.question_agent,
-            "faq": self.faq_agent,
-            "product": self.product_agent,
-            "comparison": self.comparison_agent
-        }
-        
-        # Create shared_data dict for agents to read/write
-        self.shared_data: Dict[str, Any] = {}
-        
-        # Delay between LLM-using agents (seconds) to respect rate limits
-        self.agent_delay = 5
+        """Initialize the orchestrator with LangGraph workflow."""
+        self.workflow = content_workflow
+        self._last_state: Dict[str, Any] = {}
     
     def execute_dag(self, raw_product_data: Dict) -> Dict[str, Any]:
         """
-        Execute the agent DAG with dependency-based scheduling.
+        Execute the LangGraph workflow with the given product data.
         
         Args:
-            raw_product_data: Raw product data to process
+            raw_product_data: Raw product data dictionary
             
         Returns:
             Dictionary with all outputs: {"faq": ..., "product": ..., "comparison": ...}
         """
-        # Add raw_product_data to shared_data
-        self.shared_data["raw_input"] = raw_product_data
+        print("Starting LangGraph workflow execution...")
         
-        # Track completed agents
-        completed_agents: List[str] = []
+        # Create initial state
+        initial_state: ContentGenerationState = {
+            "raw_input": raw_product_data
+        }
         
-        # Get total number of agents
-        total_agents = len(self.agents)
+        # Execute the LangGraph workflow
+        final_state = self.workflow.invoke(initial_state)
         
-        # Agents that use LLM (need delay after execution)
-        llm_agents = {"questions", "product", "comparison", "faq"}
+        # Store state for status checks
+        self._last_state = final_state
         
-        # Execute DAG until all agents are completed
-        while len(completed_agents) < total_agents:
-            # Find agents that can execute (dependencies satisfied)
-            executable_agents = []
-            for agent_id, agent in self.agents.items():
-                if agent_id not in completed_agents and agent.can_execute(completed_agents):
-                    executable_agents.append((agent_id, agent))
-            
-            # Execute those agents (sequentially for simplicity)
-            for agent_id, agent in executable_agents:
-                print(f"Executing agent: {agent_id}...")
-                
-                # Execute the agent
-                output = agent.execute(self.shared_data)
-                
-                # Store agent output in shared_data[agent_id]
-                self.shared_data[agent_id] = output
-                
-                # Add agent_id to completed_agents
-                completed_agents.append(agent_id)
-                
-                print(f"Agent {agent_id} completed.")
-                
-                # Add delay after LLM agents to respect rate limits
-                if agent_id in llm_agents and len(completed_agents) < total_agents:
-                    print(f"Waiting {self.agent_delay}s to respect rate limits...")
-                    time.sleep(self.agent_delay)
+        print("LangGraph workflow execution completed.")
         
-        # Return dict with all page outputs
+        # Return dict with all page outputs (same interface as before)
         return {
-            "faq": self.shared_data.get("faq"),
-            "product": self.shared_data.get("product"),
-            "comparison": self.shared_data.get("comparison")
+            "faq": final_state.get("faq_output"),
+            "product": final_state.get("product_output"),
+            "comparison": final_state.get("comparison_output")
         }
     
     def get_agent_status(self) -> Dict[str, str]:
         """
-        Get the status of all agents.
+        Get the status of all agents based on last execution.
         
         Returns:
             Dictionary with agent statuses
         """
-        return {agent_id: agent.status for agent_id, agent in self.agents.items()}
+        # In LangGraph, if we have outputs, the nodes completed successfully
+        return {
+            "parser": "completed" if self._last_state.get("parsed_product") else "pending",
+            "questions": "completed" if self._last_state.get("questions") else "pending",
+            "faq": "completed" if self._last_state.get("faq_output") else "pending",
+            "product": "completed" if self._last_state.get("product_output") else "pending",
+            "comparison": "completed" if self._last_state.get("comparison_output") else "pending"
+        }
     
     def reset(self):
         """Reset the orchestrator for a new execution."""
-        self.__init__()
+        self._last_state = {}
 
 
 def main():
